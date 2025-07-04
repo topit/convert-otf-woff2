@@ -24,7 +24,7 @@ jobs:
         run: |
             sudo apt update
             sudo apt upgrade
-            sudo apt install -y llvm clang pkg-config libssl-dev protobuf-compiler build-essential
+            sudo apt install -y llvm clang pkg-config libssl-dev protobuf-compiler build-essential libc6-dev
 
       - name: Update Rust
         run: rustup target add wasm32-unknown-unknown
