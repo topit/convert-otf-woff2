@@ -47,9 +47,10 @@ jobs:
           cargo build --target wasm32-wasip1 --release
 
       - name: Build wasm-bindgen
-        run: wasm-bindgen target/wasm32-wasip1/release/convert_otf_woff2.wasm --out-dir pkg --target web --no-typescript
+        run: wasm-bindgen target/wasm32-wasip1/release/convert_otf_woff2.wasm --out-dir pkg --target web
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: convert_otf_woff2.wasm
+          path: pkg/
