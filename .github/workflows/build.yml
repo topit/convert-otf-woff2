@@ -34,6 +34,12 @@ jobs:
       - name: Update Rust
         run: rustup target add wasm32-wasip1
 
+      - name: Install wasm-bindgen
+        uses: jetli/wasm-bindgen-action@v0.2.0
+        with:
+          # Optional version of wasm-bindgen to install(eg. '0.2.83', 'latest')
+          version: 'latest'
+
       - name: Build
         run: |
           export WASI_SYSROOT="/opt/wasi-sdk/wasi-sdk-24.0-x86_64-linux/share/wasi-sysroot/"
