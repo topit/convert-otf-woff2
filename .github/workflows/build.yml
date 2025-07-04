@@ -20,11 +20,6 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Setup WASI Environment
-        working-directory: .
-        run: |
-            sudo sh ./.devcontainer/wasi-install.sh
-            sudo sh ./.devcontainer/wasm-opt-install.sh
       - name: Setup Environment
         run: |
             sudo apt update
@@ -32,7 +27,7 @@ jobs:
             sudo apt install -y llvm clang pkg-config libssl-dev protobuf-compiler
 
       - name: Update Rust
-        run: rustup target add wasm32-wasip1
+        run: rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-bindgen
         uses: jetli/wasm-bindgen-action@v0.2.0
@@ -41,13 +36,10 @@ jobs:
           version: 'latest'
 
       - name: Build
-        run: |
-          export WASI_SYSROOT="/opt/wasi-sdk/wasi-sdk-24.0-x86_64-linux/share/wasi-sysroot/"
-          export PATH=$PATH:/opt/binaryen/binaryen-version_119/bin
-          cargo build --target wasm32-wasip1 --release
+        run: cargo build --target wasm32-unknown-unknown --release
 
       - name: Build wasm-bindgen
-        run: wasm-bindgen target/wasm32-wasip1/release/convert_otf_woff2.wasm --out-dir pkg --target web
+        run: wasm-bindgen target/wasm32-unknown-unknown/release/convert_otf_woff2.wasm --out-dir pkg --target web
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
