@@ -1,0 +1,41 @@
+name: buid
+on :
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: release - wasm
+    runs-on: ubuntu-24.04
+    env:
+        TZ: Asia/Shanghai
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+          components: clippy, rustfmt
+
+      - name: Setup Environment
+        run: |
+            sudo apt update
+            sudo apt upgrade
+            sudo apt install -y llvm clang pkg-config libssl-dev protobuf-compiler
+
+      - name: Build
+        run: cargo build --release --target wasm32-unknown-unknown
+
+      - name: Build wasm-bindgen
+        run: wasm-bindgen target/wasm32-unknown-unknown/release/convert_otf_woff2.wasm --out-dir pkg --target web --no-typescript
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: convert_otf_woff2.wasm
