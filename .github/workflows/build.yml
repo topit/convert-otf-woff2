@@ -19,20 +19,25 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          override: true
-          profile: minimal
-          components: clippy, rustfmt
 
+      - name: Setup WASI Environment
+        working-directory: .
+        run: |
+            sudo sh ./.devcontainer/wasi-install.sh
+            sudo sh ./.devcontainer/wasm-opt-install.sh
       - name: Setup Environment
         run: |
             sudo apt update
             sudo apt upgrade
             sudo apt install -y llvm clang pkg-config libssl-dev protobuf-compiler
-            rustup target add wasm32-wasip1
+
+      - name: Update Rust
+        run: rustup target add wasm32-wasip1
 
       - name: Build
         run: |
-          # cargo build --release --target wasm32-unknown-unknown
+          export WASI_SYSROOT="/opt/wasi-sdk/wasi-sdk-24.0-x86_64-linux/share/wasi-sysroot/"
+          export PATH=$PATH:/opt/binaryen/binaryen-version_119/bin
           cargo build --target wasm32-wasip1 --release
 
       - name: Build wasm-bindgen
