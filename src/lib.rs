@@ -9,21 +9,28 @@ pub fn set_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
-/// 将 OTF (OpenType Font) 格式的字体数据转换为 WOFF2 格式。
-///
-/// # 参数
-/// * `otf_data` - 一个包含 OTF 字体数据的字节切片 (`&[u8]`)。
-///
-/// # 返回
-/// * `Ok(Vec<u8>)` - 如果转换成功，返回一个包含 WOFF2 数据的 `Vec<u8>`。
-/// * `Err(String)` - 如果发生任何错误（例如，无效的输入数据或转换失败），
-///   返回一个描述错误的字符串。
+fn read_binary_file(file_path: &str) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(file_path)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+    Ok(buffer)
+}
+
 #[wasm_bindgen]
-pub fn convert_otf_to_woff2(otf_data: &[u8]) -> Result<Vec<u8>, String> {
-    let woff2_buffer = woff::version2::compress(otf_data, String::from(""), 1, true)
+pub fn convert_otf_to_woff2() {
+    let args: Vec<String> = std::env::args().collect();
+    let target = "/tmp/fonts/".to_owned() + &args[0];
+    let input = read_binary_file(&target).expect("Failed to read input file");
+
+    let woff2_buffer = woff::version2::compress(&input, String::from(""), 1, true)
         .expect("Failed to compress subset");
 
-    // 3. 返回结果
-    // 如果转换成功，我们从 Cursor 中取出内部的 Vec<u8> 并返回。
-    Ok(woff2_buffer)
+    let path = "/tmp/".to_owned() + &args[0];
+    let _ = std::fs::write(path, woff2_buffer).unwrap();
+}
+
+#[no_mangle]
+pub fn _start() {
+    convert_otf_to_woff2()
 }
