@@ -1,3 +1,7 @@
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
 use wasm_bindgen::prelude::*;
 
 // 当 `console_error_panic_hook` feature 被启用时，

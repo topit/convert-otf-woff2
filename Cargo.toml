@@ -15,6 +15,10 @@ wasm-bindgen = "0.2"
 woff = "0.3.4"
 opentype = "0.38.1"      # 用于解析和验证 OTF 字体
 console_error_panic_hook = { version = "0.1.7", optional = true }
+wee_alloc = "0.4"
+
+[build-dependencies]
+cc = "1.2"  # 如果 woff crate 依赖 C 代码
 
 [profile.release]
 lto = true
