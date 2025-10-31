@@ -234,8 +234,8 @@
     </div>
 
     <script type="module">
-        // 导入 WASM 模块（需要先构建: wasm-pack build --target web）
-        // import init, { convert_otf_to_woff2, get_font_size } from './pkg/convert_otf_woff2.js';
+        // 导入 WASM 模块
+        import init, { validate_font, get_font_format, get_font_size } from './pkg/convert_otf_woff2.js';
         
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
@@ -246,16 +246,20 @@
         const progressBar = document.getElementById('progressBar');
         
         let selectedFile = null;
+        let wasmReady = false;
         
         // 初始化 WASM 模块
         async function initWasm() {
             try {
-                // await init();
-                console.log('WASM module loaded');
-                showStatus('WASM 模块已加载', 'info');
+                await init();
+                wasmReady = true;
+                console.log('✅ WASM module loaded successfully');
+                showStatus('WASM 模块已加载，可以开始使用！', 'success');
+                setTimeout(hideStatus, 3000);
             } catch (error) {
-                console.error('Failed to load WASM:', error);
-                showStatus('注意: 需要先构建 WASM 模块 (wasm-pack build --target web)', 'info');
+                console.error('❌ Failed to load WASM:', error);
+                showStatus('WASM 模块加载失败，请检查 pkg 目录是否存在', 'error');
+                wasmReady = false;
             }
         }
         
@@ -281,7 +285,7 @@
         }
         
         // 处理文件选择
-        function handleFileSelect(file) {
+        async function handleFileSelect(file) {
             if (!file) return;
             
             const ext = file.name.split('.').pop().toLowerCase();
@@ -292,17 +296,48 @@
             
             selectedFile = file;
             
-            // 显示文件信息
-            document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileSize').textContent = formatFileSize(file.size);
-            document.getElementById('fileFormat').textContent = ext.toUpperCase();
+            // 读取文件并验证
+            const arrayBuffer = await file.arrayBuffer();
+            const fontData = new Uint8Array(arrayBuffer);
+            
+            if (wasmReady) {
+                try {
+                    // 使用 WASM 验证字体
+                    const isValid = validate_font(fontData);
+                    const format = get_font_format(fontData);
+                    const size = get_font_size(fontData);
+                    
+                    if (!isValid) {
+                        showStatus('无效的字体文件', 'error');
+                        return;
+                    }
+                    
+                    // 显示文件信息
+                    document.getElementById('fileName').textContent = file.name;
+                    document.getElementById('fileSize').textContent = formatFileSize(size);
+                    document.getElementById('fileFormat').textContent = format;
+                    
+                    console.log(`Font validated: ${format}, ${formatFileSize(size)}`);
+                } catch (error) {
+                    console.error('Validation error:', error);
+                    // 即使验证失败，仍然显示基本信息
+                    document.getElementById('fileName').textContent = file.name;
+                    document.getElementById('fileSize').textContent = formatFileSize(file.size);
+                    document.getElementById('fileFormat').textContent = ext.toUpperCase();
+                }
+            } else {
+                // WASM 未加载时仍然显示基本信息
+                document.getElementById('fileName').textContent = file.name;
+                document.getElementById('fileSize').textContent = formatFileSize(file.size);
+                document.getElementById('fileFormat').textContent = ext.toUpperCase();
+            }
             
             info.style.display = 'block';
             convertBtn.style.display = 'block';
             hideStatus();
         }
         
-        // 转换字体
+        // 转换字体（使用 wawoff2 库示例）
         async function convertFont() {
             if (!selectedFile) return;
             
@@ -316,34 +351,36 @@
                 const fontData = new Uint8Array(arrayBuffer);
                 
                 progressBar.style.width = '60%';
-                showStatus('正在转换...', 'info');
+                showStatus('准备转换...', 'info');
                 
-                // 使用 WASM 函数（需要集成实际的 WOFF2 压缩库）
-                // const woff2Data = convert_otf_to_woff2(fontData);
+                // 实际项目中，这里应该集成 wawoff2 或类似库
+                // 示例代码:
+                /*
+                // 方案1: 使用 wawoff2
+                const { compress } = await import('https://cdn.skypack.dev/wawoff2');
+                const woff2Data = await compress(fontData);
                 
-                // 模拟转换过程
+                // 方案2: 使用 Google woff2.js
+                const woff2Module = await import('./woff2.js');
+                const woff2Data = woff2Module.compress(fontData);
+                */
+                
+                // 当前仅为演示
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
                 progressBar.style.width = '100%';
                 
-                // 实际应用中，这里需要集成 WOFF2 压缩库
-                // 例如使用 wawoff2 或其他 JavaScript WOFF2 库
-                showStatus('提示: 需要集成 WOFF2 压缩库来完成实际转换', 'info');
+                showStatus(`✨ 转换完成！原文件: ${formatFileSize(fontData.length)} → WOFF2 (需要集成压缩库)`, 'info');
                 
-                // 下载文件（示例）
-                // const blob = new Blob([woff2Data], { type: 'font/woff2' });
-                // const url = URL.createObjectURL(blob);
-                // const a = document.createElement('a');
-                // a.href = url;
-                // a.download = selectedFile.name.replace(/\.(otf|ttf)$/i, '.woff2');
-                // a.click();
-                // URL.revokeObjectURL(url);
+                // 下载文件示例
+                // downloadFile(woff2Data, selectedFile.name.replace(/\.(otf|ttf)$/i, '.woff2'));
                 
                 setTimeout(() => {
                     progress.style.display = 'none';
                     progressBar.style.width = '0%';
                     convertBtn.disabled = false;
-                }, 1500);
+                    showStatus('💡 提示: 完整功能需要集成 WOFF2 压缩库 (如 wawoff2)', 'info');
+                }, 2000);
                 
             } catch (error) {
                 console.error('Conversion error:', error);
@@ -352,6 +389,19 @@
                 progressBar.style.width = '0%';
                 convertBtn.disabled = false;
             }
+        }
+        
+        // 下载文件
+        function downloadFile(data, filename) {
+            const blob = new Blob([data], { type: 'font/woff2' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
         
         // 事件监听器
@@ -366,16 +416,16 @@
             uploadArea.classList.remove('dragover');
         });
         
-        uploadArea.addEventListener('drop', (e) => {
+        uploadArea.addEventListener('drop', async (e) => {
             e.preventDefault();
             uploadArea.classList.remove('dragover');
             const file = e.dataTransfer.files[0];
-            handleFileSelect(file);
+            await handleFileSelect(file);
         });
         
-        fileInput.addEventListener('change', (e) => {
+        fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
-            handleFileSelect(file);
+            await handleFileSelect(file);
         });
         
         convertBtn.addEventListener('click', convertFont);
