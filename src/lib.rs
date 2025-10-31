@@ -28,7 +28,7 @@ pub fn set_panic_hook() {
 ///
 /// # 使用方式
 /// 在 JavaScript 中，推荐使用以下方式实现完整转换:
-/// 
+///
 /// ```javascript
 /// // 方案1: 使用 fonttools wasm (推荐)
 /// import init from './pkg/convert_otf_woff2.js';
@@ -44,33 +44,33 @@ pub fn set_panic_hook() {
 #[wasm_bindgen]
 pub fn convert_otf_to_woff2(otf_data: &[u8]) -> Result<Vec<u8>, JsValue> {
     log(&format!("Converting font: {} bytes", otf_data.len()));
-    
+
     // 验证输入数据
     if otf_data.is_empty() {
         return Err(JsValue::from_str("Empty font data"));
     }
-    
+
     // 简单验证是否为字体文件（检查魔数）
     if otf_data.len() < 4 {
         return Err(JsValue::from_str("Invalid font data: too short"));
     }
-    
+
     // 检查常见字体格式的魔数
     let magic = &otf_data[0..4];
     let is_valid_font = match magic {
-        [0x00, 0x01, 0x00, 0x00] => true,  // TrueType 1.0
-        [b'O', b'T', b'T', b'O'] => true,  // OpenType with CFF
-        [b't', b'r', b'u', b'e'] => true,  // TrueType (Apple)
-        [b't', b'y', b'p', b'1'] => true,  // PostScript Type 1
-        [b'w', b'O', b'F', b'F'] => true,  // WOFF 1.0
-        [b'w', b'O', b'F', b'2'] => true,  // WOFF 2.0
+        [0x00, 0x01, 0x00, 0x00] => true, // TrueType 1.0
+        [b'O', b'T', b'T', b'O'] => true, // OpenType with CFF
+        [b't', b'r', b'u', b'e'] => true, // TrueType (Apple)
+        [b't', b'y', b'p', b'1'] => true, // PostScript Type 1
+        [b'w', b'O', b'F', b'F'] => true, // WOFF 1.0
+        [b'w', b'O', b'F', b'2'] => true, // WOFF 2.0
         _ => false,
     };
-    
+
     if !is_valid_font {
         return Err(JsValue::from_str("Invalid font data: unknown format"));
     }
-    
+
     // 返回提示信息
     // 由于 WOFF2 压缩需要复杂的 C 库，在 WASM 环境中建议使用 JavaScript 库
     Err(JsValue::from_str(
@@ -94,18 +94,18 @@ pub fn validate_font(font_data: &[u8]) -> Result<bool, JsValue> {
     if font_data.len() < 4 {
         return Ok(false);
     }
-    
+
     let magic = &font_data[0..4];
-    let is_valid = match magic {
-        [0x00, 0x01, 0x00, 0x00] | 
-        [b'O', b'T', b'T', b'O'] |
-        [b't', b'r', b'u', b'e'] |
-        [b't', b'y', b'p', b'1'] |
-        [b'w', b'O', b'F', b'F'] |
-        [b'w', b'O', b'F', b'2'] => true,
-        _ => false,
-    };
-    
+    let is_valid = matches!(
+        magic,
+        [0x00, 0x01, 0x00, 0x00]
+            | [b'O', b'T', b'T', b'O']
+            | [b't', b'r', b'u', b'e']
+            | [b't', b'y', b'p', b'1']
+            | [b'w', b'O', b'F', b'F']
+            | [b'w', b'O', b'F', b'2']
+    );
+
     Ok(is_valid)
 }
 
@@ -133,7 +133,7 @@ pub fn get_font_format(font_data: &[u8]) -> Result<String, JsValue> {
     if font_data.len() < 4 {
         return Err(JsValue::from_str("Font data too short"));
     }
-    
+
     let magic = &font_data[0..4];
     let format = match magic {
         [0x00, 0x01, 0x00, 0x00] => "TrueType",
@@ -144,6 +144,6 @@ pub fn get_font_format(font_data: &[u8]) -> Result<String, JsValue> {
         [b'w', b'O', b'F', b'2'] => "WOFF 2.0",
         _ => "Unknown",
     };
-    
+
     Ok(format.to_string())
 }
