@@ -3,29 +3,24 @@
 TARGET_NAME := convert_otf_woff2
 
 # Build artifacts
-WASM_INPUT_PATH := target/wasm32-wasip1/release/$(TARGET_NAME).wasm
+WASM_INPUT_PATH := target/wasm32-unknown-unknown/release/$(TARGET_NAME).wasm
 OUT_DIR := pkg
-
-# Tool paths (adjust if your installation paths are different)
-# Homebrew on Apple Silicon default path
-HOMEBREW_PREFIX ?= /opt/homebrew
-WASI_SDK_PATH ?= /Users/lizihan/wasi-sdk/wasi-sdk-25.0-arm64-macos/
-BINARYEN_PATH ?= /Users/lizihan/binaryen/binaryen-version_123
-
-# Environment variables for build
-export WASI_SYSROOT := $(WASI_SDK_PATH)/share/wasi-sysroot
-export PATH := $(PATH):$(BINARYEN_PATH)/bin
 
 # --- Targets ---
 
-.PHONY: all build bindgen clean help
+.PHONY: all build bindgen clean help install-target
 
 all: bindgen
 
+# Install the wasm32-unknown-unknown target if not already installed
+install-target:
+	@echo "Installing wasm32-unknown-unknown target..."
+	@rustup target add wasm32-unknown-unknown
+
 # Build the Rust code to a Wasm module
-build:
+build: install-target
 	@echo "Building Rust code to Wasm..."
-	@cargo build --target wasm32-wasip1 --release
+	@cargo build --target wasm32-unknown-unknown --release
 
 # Run wasm-bindgen to generate web-compatible files
 bindgen: build
@@ -43,9 +38,10 @@ help:
 	@echo "Makefile for building the Wasm project"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make all       - Build everything (default)."
-	@echo "  make build     - Compile Rust code to Wasm."
-	@echo "  make bindgen   - Generate web bindings from the Wasm file."
-	@echo "  make clean     - Remove all build artifacts."
+	@echo "  make all          - Build everything (default)."
+	@echo "  make install-target - Install wasm32-unknown-unknown target."
+	@echo "  make build        - Compile Rust code to Wasm."
+	@echo "  make bindgen      - Generate web bindings from the Wasm file."
+	@echo "  make clean        - Remove all build artifacts."
 	@echo ""
 

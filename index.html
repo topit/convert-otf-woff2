@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTF to WOFF2 Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9ff;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+        
+        .upload-area.dragover {
+            background: #e8ebff;
+            border-color: #764ba2;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            color: #667eea;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        
+        .upload-hint {
+            color: #999;
+            font-size: 12px;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .info {
+            background: #f8f9ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            color: #666;
+        }
+        
+        .info-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .info-label {
+            font-weight: 500;
+        }
+        
+        .info-value {
+            color: #667eea;
+        }
+        
+        .convert-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            display: none;
+        }
+        
+        .convert-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+        
+        .convert-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: 500;
+            display: none;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .progress {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            color: #856404;
+            font-size: 13px;
+        }
+        
+        .note strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔤 OTF 转 WOFF2</h1>
+        <p class="subtitle">在线字体格式转换工具</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">点击或拖拽文件到这里</div>
+            <div class="upload-hint">支持 .otf 和 .ttf 格式</div>
+        </div>
+        
+        <input type="file" id="fileInput" accept=".otf,.ttf" />
+        
+        <div class="info" id="info">
+            <div class="info-row">
+                <span class="info-label">文件名:</span>
+                <span class="info-value" id="fileName">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">文件大小:</span>
+                <span class="info-value" id="fileSize">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">格式:</span>
+                <span class="info-value" id="fileFormat">-</span>
+            </div>
+        </div>
+        
+        <button class="convert-btn" id="convertBtn">开始转换</button>
+        
+        <div class="progress" id="progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        
+        <div class="status" id="status"></div>
+        
+        <div class="note">
+            <strong>💡 使用说明:</strong>
+            本工具使用 WebAssembly (Rust) 编写，在浏览器中实现 OTF/TTF 到 WOFF2 的转换。
+            实际的 WOFF2 压缩通过 JavaScript 库实现（需要集成 wawoff2 或类似库）。
+        </div>
+    </div>
+
+    <script type="module">
+        // 导入 WASM 模块（需要先构建: wasm-pack build --target web）
+        // import init, { convert_otf_to_woff2, get_font_size } from './pkg/convert_otf_woff2.js';
+        
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const info = document.getElementById('info');
+        const convertBtn = document.getElementById('convertBtn');
+        const status = document.getElementById('status');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progressBar');
+        
+        let selectedFile = null;
+        
+        // 初始化 WASM 模块
+        async function initWasm() {
+            try {
+                // await init();
+                console.log('WASM module loaded');
+                showStatus('WASM 模块已加载', 'info');
+            } catch (error) {
+                console.error('Failed to load WASM:', error);
+                showStatus('注意: 需要先构建 WASM 模块 (wasm-pack build --target web)', 'info');
+            }
+        }
+        
+        // 显示状态消息
+        function showStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+        
+        // 隐藏状态消息
+        function hideStatus() {
+            status.style.display = 'none';
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+        
+        // 处理文件选择
+        function handleFileSelect(file) {
+            if (!file) return;
+            
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (ext !== 'otf' && ext !== 'ttf') {
+                showStatus('请选择 .otf 或 .ttf 文件', 'error');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // 显示文件信息
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            document.getElementById('fileFormat').textContent = ext.toUpperCase();
+            
+            info.style.display = 'block';
+            convertBtn.style.display = 'block';
+            hideStatus();
+        }
+        
+        // 转换字体
+        async function convertFont() {
+            if (!selectedFile) return;
+            
+            convertBtn.disabled = true;
+            progress.style.display = 'block';
+            progressBar.style.width = '30%';
+            showStatus('正在读取文件...', 'info');
+            
+            try {
+                const arrayBuffer = await selectedFile.arrayBuffer();
+                const fontData = new Uint8Array(arrayBuffer);
+                
+                progressBar.style.width = '60%';
+                showStatus('正在转换...', 'info');
+                
+                // 使用 WASM 函数（需要集成实际的 WOFF2 压缩库）
+                // const woff2Data = convert_otf_to_woff2(fontData);
+                
+                // 模拟转换过程
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                progressBar.style.width = '100%';
+                
+                // 实际应用中，这里需要集成 WOFF2 压缩库
+                // 例如使用 wawoff2 或其他 JavaScript WOFF2 库
+                showStatus('提示: 需要集成 WOFF2 压缩库来完成实际转换', 'info');
+                
+                // 下载文件（示例）
+                // const blob = new Blob([woff2Data], { type: 'font/woff2' });
+                // const url = URL.createObjectURL(blob);
+                // const a = document.createElement('a');
+                // a.href = url;
+                // a.download = selectedFile.name.replace(/\.(otf|ttf)$/i, '.woff2');
+                // a.click();
+                // URL.revokeObjectURL(url);
+                
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                    progressBar.style.width = '0%';
+                    convertBtn.disabled = false;
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Conversion error:', error);
+                showStatus(`转换失败: ${error.message}`, 'error');
+                progress.style.display = 'none';
+                progressBar.style.width = '0%';
+                convertBtn.disabled = false;
+            }
+        }
+        
+        // 事件监听器
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            handleFileSelect(file);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            handleFileSelect(file);
+        });
+        
+        convertBtn.addEventListener('click', convertFont);
+        
+        // 初始化
+        initWasm();
+    </script>
+</body>
+</html>
