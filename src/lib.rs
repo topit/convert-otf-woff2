@@ -74,11 +74,7 @@ pub fn convert_otf_to_woff2(otf_data: &[u8]) -> Result<Vec<u8>, JsValue> {
     // 返回提示信息
     // 由于 WOFF2 压缩需要复杂的 C 库，在 WASM 环境中建议使用 JavaScript 库
     Err(JsValue::from_str(
-        "WASM interface ready. For actual WOFF2 conversion, please use JavaScript libraries like 'wawoff2' or Google's woff2.js. 
-        
-Example:
-import { compress } from 'wawoff2';
-const woff2Data = await compress(otfData);"
+        "WASM interface ready. For actual WOFF2 conversion, please use JavaScript libraries like 'wawoff2' or Google's woff2.js. Example: import { compress } from 'wawoff2'; const woff2Data = await compress(otfData);"
     ))
 }
 
