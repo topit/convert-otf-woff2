@@ -17,3 +17,4 @@ src/pb/*.rs
 /target
 .shuttle*
 Secrets*.toml
+pkg
