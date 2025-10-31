@@ -228,8 +228,8 @@
         
         <div class="note">
             <strong>💡 使用说明:</strong>
-            本工具使用 WebAssembly (Rust) 编写，在浏览器中实现 OTF/TTF 到 WOFF2 的转换。
-            实际的 WOFF2 压缩通过 JavaScript 库实现（需要集成 wawoff2 或类似库）。
+            本工具使用 WebAssembly (Rust) 进行字体验证，通过 CDN 自动加载 wawoff2 库实现 WOFF2 压缩。
+            完全在浏览器中运行，无需上传文件到服务器，保护您的隐私。支持 OTF、TTF 格式转换为 WOFF2。
         </div>
     </div>
 
@@ -247,6 +247,7 @@
         
         let selectedFile = null;
         let wasmReady = false;
+        let wawoff2Module = null;
         
         // 初始化 WASM 模块
         async function initWasm() {
@@ -260,6 +261,29 @@
                 console.error('❌ Failed to load WASM:', error);
                 showStatus('WASM 模块加载失败，请检查 pkg 目录是否存在', 'error');
                 wasmReady = false;
+            }
+        }
+        
+        // 加载 wawoff2 库用于 WOFF2 压缩
+        async function loadWawoff2() {
+            try {
+                // 使用 esm.sh CDN 加载 wawoff2
+                const module = await import('https://esm.sh/wawoff2@2.0.1');
+                wawoff2Module = module;
+                console.log('✅ wawoff2 library loaded successfully');
+                return true;
+            } catch (error) {
+                console.warn('⚠️ Failed to load wawoff2 from CDN:', error);
+                // 尝试备用 CDN
+                try {
+                    const module = await import('https://cdn.skypack.dev/wawoff2@2.0.1');
+                    wawoff2Module = module;
+                    console.log('✅ wawoff2 loaded from backup CDN');
+                    return true;
+                } catch (error2) {
+                    console.error('❌ Failed to load wawoff2:', error2);
+                    return false;
+                }
             }
         }
         
@@ -337,50 +361,56 @@
             hideStatus();
         }
         
-        // 转换字体（使用 wawoff2 库示例）
+        // 转换字体（使用 wawoff2 库进行实际压缩）
         async function convertFont() {
             if (!selectedFile) return;
             
             convertBtn.disabled = true;
             progress.style.display = 'block';
-            progressBar.style.width = '30%';
+            progressBar.style.width = '20%';
             showStatus('正在读取文件...', 'info');
             
             try {
                 const arrayBuffer = await selectedFile.arrayBuffer();
                 const fontData = new Uint8Array(arrayBuffer);
                 
+                progressBar.style.width = '40%';
+                
+                // 如果 wawoff2 还未加载，先加载它
+                if (!wawoff2Module) {
+                    showStatus('正在加载 WOFF2 压缩库...', 'info');
+                    const loaded = await loadWawoff2();
+                    if (!loaded) {
+                        showStatus('❌ 无法加载 WOFF2 压缩库，请检查网络连接', 'error');
+                        progress.style.display = 'none';
+                        progressBar.style.width = '0%';
+                        convertBtn.disabled = false;
+                        return;
+                    }
+                }
+                
                 progressBar.style.width = '60%';
-                showStatus('准备转换...', 'info');
+                showStatus('正在压缩为 WOFF2 格式...', 'info');
                 
-                // 实际项目中，这里应该集成 wawoff2 或类似库
-                // 示例代码:
-                /*
-                // 方案1: 使用 wawoff2
-                const { compress } = await import('https://cdn.skypack.dev/wawoff2');
-                const woff2Data = await compress(fontData);
-                
-                // 方案2: 使用 Google woff2.js
-                const woff2Module = await import('./woff2.js');
-                const woff2Data = woff2Module.compress(fontData);
-                */
-                
-                // 当前仅为演示
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // 使用 wawoff2 进行实际压缩
+                const woff2Data = await wawoff2Module.compress(fontData);
                 
                 progressBar.style.width = '100%';
                 
-                showStatus(`✨ 转换完成！原文件: ${formatFileSize(fontData.length)} → WOFF2 (需要集成压缩库)`, 'info');
+                const compressionRatio = ((1 - woff2Data.length / fontData.length) * 100).toFixed(1);
+                showStatus(`✨ 转换成功！压缩率: ${compressionRatio}%`, 'success');
                 
-                // 下载文件示例
-                // downloadFile(woff2Data, selectedFile.name.replace(/\.(otf|ttf)$/i, '.woff2'));
+                console.log(`Conversion complete: ${formatFileSize(fontData.length)} → ${formatFileSize(woff2Data.length)}`);
+                
+                // 下载转换后的文件
+                downloadFile(woff2Data, selectedFile.name.replace(/\.(otf|ttf)$/i, '.woff2'));
                 
                 setTimeout(() => {
                     progress.style.display = 'none';
                     progressBar.style.width = '0%';
                     convertBtn.disabled = false;
-                    showStatus('💡 提示: 完整功能需要集成 WOFF2 压缩库 (如 wawoff2)', 'info');
-                }, 2000);
+                    showStatus(`🎉 已下载: ${selectedFile.name.replace(/\.(otf|ttf)$/i, '.woff2')}`, 'success');
+                }, 1500);
                 
             } catch (error) {
                 console.error('Conversion error:', error);
@@ -430,8 +460,22 @@
         
         convertBtn.addEventListener('click', convertFont);
         
-        // 初始化
-        initWasm();
+        // 初始化 WASM 模块和 wawoff2
+        async function initialize() {
+            await initWasm();
+            // 预加载 wawoff2 库以加快首次转换速度
+            showStatus('正在加载 WOFF2 压缩库...', 'info');
+            const loaded = await loadWawoff2();
+            if (loaded) {
+                showStatus('✅ 所有模块已就绪，可以开始转换！', 'success');
+                setTimeout(hideStatus, 3000);
+            } else {
+                showStatus('⚠️ WOFF2 库加载失败，将在转换时重试', 'info');
+                setTimeout(hideStatus, 5000);
+            }
+        }
+        
+        initialize();
     </script>
 </body>
 </html>
