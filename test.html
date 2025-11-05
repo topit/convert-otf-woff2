@@ -67,8 +67,16 @@
     </div>
     
     <div class="test-section">
+        <h2>测试 WOFF2 转换</h2>
+        <input type="file" id="convertFile" accept=".otf,.ttf">
+        <button id="testConversion">转换为 WOFF2</button>
+        <div id="conversionResult"></div>
+    </div>
+    
+    <div class="test-section">
         <h2>API 使用示例</h2>
         <pre><code>import init, { 
+    convert_otf_to_woff2,
     validate_font, 
     get_font_format, 
     get_font_size 
@@ -90,14 +98,19 @@ console.log('Format:', format);
 
 // 获取大小
 const size = get_font_size(fontData);
-console.log('Size:', size, 'bytes');</code></pre>
+console.log('Size:', size, 'bytes');
+
+// 转换为 WOFF2（纯 Rust 实现）
+const woff2Data = convert_otf_to_woff2(fontData);
+console.log('WOFF2 size:', woff2Data.length, 'bytes');</code></pre>
     </div>
 
     <script type="module">
-        import init, { validate_font, get_font_format, get_font_size } from './pkg/convert_otf_woff2.js';
+        import init, { convert_otf_to_woff2, validate_font, get_font_format, get_font_size } from './pkg/convert_otf_woff2.js';
         
         const wasmResult = document.getElementById('wasmResult');
         const validationResult = document.getElementById('validationResult');
+        const conversionResult = document.getElementById('conversionResult');
         
         // 测试 WASM 模块加载
         document.getElementById('testWasm').addEventListener('click', async () => {
@@ -167,6 +180,60 @@ console.log('Size:', size, 'bytes');</code></pre>
                         <strong>❌ 验证失败:</strong> ${error.message}
                     </div>
                 `;
+            }
+        });
+        
+        // 测试 WOFF2 转换
+        document.getElementById('testConversion').addEventListener('click', async () => {
+            const file = document.getElementById('convertFile').files[0];
+            if (!file) {
+                conversionResult.innerHTML = '<div class="result error">请选择一个字体文件</div>';
+                return;
+            }
+            
+            conversionResult.innerHTML = '<div class="result">⏳ 转换中...</div>';
+            
+            try {
+                await init();
+                
+                const arrayBuffer = await file.arrayBuffer();
+                const fontData = new Uint8Array(arrayBuffer);
+                
+                const startTime = performance.now();
+                const woff2Data = convert_otf_to_woff2(fontData);
+                const endTime = performance.now();
+                
+                const compressionRatio = ((1 - woff2Data.length / fontData.length) * 100).toFixed(1);
+                const conversionTime = (endTime - startTime).toFixed(2);
+                
+                conversionResult.innerHTML = `
+                    <div class="result">
+                        <strong>✅ 转换成功!</strong><br><br>
+                        <strong>原始大小:</strong> ${(fontData.length / 1024).toFixed(2)} KB<br>
+                        <strong>WOFF2 大小:</strong> ${(woff2Data.length / 1024).toFixed(2)} KB<br>
+                        <strong>压缩率:</strong> ${compressionRatio}%<br>
+                        <strong>转换耗时:</strong> ${conversionTime} ms<br>
+                        <strong>使用方法:</strong> 纯 Rust + Brotli 压缩
+                    </div>
+                `;
+                
+                // 自动下载转换后的文件
+                const blob = new Blob([woff2Data], { type: 'font/woff2' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name.replace(/\.(otf|ttf)$/i, '.woff2');
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                console.log(`✅ WOFF2 conversion complete: ${file.name} → ${a.download}`);
+            } catch (error) {
+                conversionResult.innerHTML = `
+                    <div class="result error">
+                        <strong>❌ 转换失败:</strong> ${error.message || error}
+                    </div>
+                `;
+                console.error('Conversion error:', error);
             }
         });
         
