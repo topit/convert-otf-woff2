@@ -1,5 +1,5 @@
-name: buid
-on :
+name: build
+on:
   push:
     branches: [ main ]
   pull_request:
@@ -7,10 +7,12 @@ on :
 
 jobs:
   build:
-    name: release - wasm
+    name: release - wasm (WASI)
     runs-on: ubuntu-24.04
     env:
-        TZ: Asia/Shanghai
+      TZ: Asia/Shanghai
+      WASI_VERSION: 24
+      WASI_VERSION_FULL: 24.0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,27 +24,28 @@ jobs:
 
       - name: Setup Environment
         run: |
-            sudo apt update
-            sudo apt upgrade
-            sudo apt install -y llvm clang pkg-config libssl-dev protobuf-compiler build-essential libc6-dev
+          sudo apt update
+          sudo apt install -y llvm clang pkg-config libssl-dev build-essential libc6-dev wget
 
-      - name: Update Rust
-        run: rustup target add wasm32-unknown-unknown
+      - name: Add WASI target
+        run: rustup target add wasm32-wasip1
 
-      - name: Install wasm-bindgen
-        uses: jetli/wasm-bindgen-action@v0.2.0
-        with:
-          # Optional version of wasm-bindgen to install(eg. '0.2.83', 'latest')
-          version: 'latest'
+      - name: Download and install WASI SDK
+        run: |
+          wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-x86_64-linux.tar.gz
+          tar xvf wasi-sdk-${WASI_VERSION_FULL}-x86_64-linux.tar.gz
+          echo "WASI_SDK_PATH=${GITHUB_WORKSPACE}/wasi-sdk-${WASI_VERSION_FULL}-x86_64-linux" >> $GITHUB_ENV
 
-      - name: Build
-        run: cargo build --target wasm32-unknown-unknown --release
-
-      - name: Build wasm-bindgen
-        run: wasm-bindgen target/wasm32-unknown-unknown/release/convert_otf_woff2.wasm --out-dir pkg --target web
+      - name: Build for WASI
+        run: |
+          export CC_wasm32_wasip1="${WASI_SDK_PATH}/bin/clang --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot"
+          export CXX_wasm32_wasip1="${WASI_SDK_PATH}/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot"
+          export AR_wasm32_wasip1="${WASI_SDK_PATH}/bin/llvm-ar"
+          export CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-L ${WASI_SDK_PATH}/share/wasi-sysroot/lib/wasm32-wasip1 -l c++"
+          cargo build --target wasm32-wasip1 --release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: convert_otf_woff2.wasm
-          path: pkg/
+          path: target/wasm32-wasip1/release/convert_otf_woff2.wasm
