@@ -16,6 +16,9 @@ pub fn set_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
+/// WOFF2 文件头大小（字节）
+const WOFF2_HEADER_SIZE: usize = 48;
+
 /// WOFF2 文件头结构
 struct Woff2Header {
     signature: [u8; 4],         // 'wOF2'
@@ -36,7 +39,7 @@ struct Woff2Header {
 
 impl Woff2Header {
     fn write_to_vec(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(48);
+        let mut result = Vec::with_capacity(WOFF2_HEADER_SIZE);
         result.extend_from_slice(&self.signature);
         result.extend_from_slice(&self.flavor);
         result.extend_from_slice(&self.length.to_be_bytes());
