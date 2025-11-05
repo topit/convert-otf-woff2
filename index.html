@@ -228,14 +228,14 @@
         
         <div class="note">
             <strong>💡 使用说明:</strong>
-            本工具使用 WebAssembly (Rust) 进行字体验证，通过 CDN 自动加载 wawoff2 库实现 WOFF2 压缩。
+            本工具使用纯 Rust + WebAssembly 实现核心 WOFF2 转换逻辑，使用 Brotli 压缩算法。
             完全在浏览器中运行，无需上传文件到服务器，保护您的隐私。支持 OTF、TTF 格式转换为 WOFF2。
         </div>
     </div>
 
     <script type="module">
         // 导入 WASM 模块
-        import init, { validate_font, get_font_format, get_font_size } from './pkg/convert_otf_woff2.js';
+        import init, { convert_otf_to_woff2, validate_font, get_font_format, get_font_size } from './pkg/convert_otf_woff2.js';
         
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
@@ -247,7 +247,6 @@
         
         let selectedFile = null;
         let wasmReady = false;
-        let wawoff2Module = null;
         
         // 初始化 WASM 模块
         async function initWasm() {
@@ -261,29 +260,6 @@
                 console.error('❌ Failed to load WASM:', error);
                 showStatus('WASM 模块加载失败，请检查 pkg 目录是否存在', 'error');
                 wasmReady = false;
-            }
-        }
-        
-        // 加载 wawoff2 库用于 WOFF2 压缩
-        async function loadWawoff2() {
-            try {
-                // 使用 esm.sh CDN 加载 wawoff2
-                const module = await import('https://esm.sh/wawoff2@2.0.1');
-                wawoff2Module = module;
-                console.log('✅ wawoff2 library loaded successfully');
-                return true;
-            } catch (error) {
-                console.warn('⚠️ Failed to load wawoff2 from CDN:', error);
-                // 尝试备用 CDN
-                try {
-                    const module = await import('https://cdn.skypack.dev/wawoff2@2.0.1');
-                    wawoff2Module = module;
-                    console.log('✅ wawoff2 loaded from backup CDN');
-                    return true;
-                } catch (error2) {
-                    console.error('❌ Failed to load wawoff2:', error2);
-                    return false;
-                }
             }
         }
         
@@ -361,9 +337,14 @@
             hideStatus();
         }
         
-        // 转换字体（使用 wawoff2 库进行实际压缩）
+        // 转换字体（使用纯 Rust WASM 进行实际压缩）
         async function convertFont() {
             if (!selectedFile) return;
+            
+            if (!wasmReady) {
+                showStatus('WASM 模块未加载，请稍候重试', 'error');
+                return;
+            }
             
             convertBtn.disabled = true;
             progress.style.display = 'block';
@@ -375,25 +356,10 @@
                 const fontData = new Uint8Array(arrayBuffer);
                 
                 progressBar.style.width = '40%';
+                showStatus('正在转换为 WOFF2 格式...', 'info');
                 
-                // 如果 wawoff2 还未加载，先加载它
-                if (!wawoff2Module) {
-                    showStatus('正在加载 WOFF2 压缩库...', 'info');
-                    const loaded = await loadWawoff2();
-                    if (!loaded) {
-                        showStatus('❌ 无法加载 WOFF2 压缩库，请检查网络连接', 'error');
-                        progress.style.display = 'none';
-                        progressBar.style.width = '0%';
-                        convertBtn.disabled = false;
-                        return;
-                    }
-                }
-                
-                progressBar.style.width = '60%';
-                showStatus('正在压缩为 WOFF2 格式...', 'info');
-                
-                // 使用 wawoff2 进行实际压缩
-                const woff2Data = await wawoff2Module.compress(fontData);
+                // 使用纯 Rust WASM 进行 WOFF2 压缩
+                const woff2Data = convert_otf_to_woff2(fontData);
                 
                 progressBar.style.width = '100%';
                 
@@ -414,7 +380,7 @@
                 
             } catch (error) {
                 console.error('Conversion error:', error);
-                showStatus(`转换失败: ${error.message}`, 'error');
+                showStatus(`转换失败: ${error.message || error}`, 'error');
                 progress.style.display = 'none';
                 progressBar.style.width = '0%';
                 convertBtn.disabled = false;
