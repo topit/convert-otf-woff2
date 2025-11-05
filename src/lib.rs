@@ -19,6 +19,9 @@ pub fn set_panic_hook() {
 /// WOFF2 文件头大小（字节）
 const WOFF2_HEADER_SIZE: usize = 48;
 
+/// WOFF2 文件头中 length 字段的偏移量
+const WOFF2_LENGTH_OFFSET: usize = 8;
+
 /// WOFF2 文件头结构
 struct Woff2Header {
     signature: [u8; 4],         // 'wOF2'
@@ -71,8 +74,7 @@ fn compress_with_brotli(data: &[u8]) -> Result<Vec<u8>, String> {
         ..Default::default()
     };
 
-    let mut cursor = std::io::Cursor::new(data);
-    match brotli::BrotliCompress(&mut cursor, &mut compressed, &params) {
+    match brotli::BrotliCompress(&mut &data[..], &mut compressed, &params) {
         Ok(_) => Ok(compressed),
         Err(e) => Err(format!("Brotli compression failed: {}", e)),
     }
@@ -157,7 +159,15 @@ pub fn convert_otf_to_woff2(otf_data: &[u8]) -> Result<Vec<u8>, JsValue> {
 /// 这是一个简化实现，使用 Brotli 压缩整个字体数据
 /// 完整的 WOFF2 规范还包括表级别的优化和转换
 fn convert_font_to_woff2(font_data: &[u8], flavor: &[u8]) -> Result<Vec<u8>, String> {
-    // 读取字体表数量
+    // 验证 flavor 是 4 字节
+    if flavor.len() != 4 {
+        return Err("Invalid flavor size".to_string());
+    }
+
+    // 读取字体表数量（需要至少5个字节）
+    if font_data.len() < 6 {
+        return Err("Font data too short to read num_tables".to_string());
+    }
     let num_tables = read_u16_be(font_data, 4);
 
     // 使用 Brotli 压缩字体数据
@@ -166,7 +176,7 @@ fn convert_font_to_woff2(font_data: &[u8], flavor: &[u8]) -> Result<Vec<u8>, Str
     // 构建 WOFF2 头部
     let header = Woff2Header {
         signature: [b'w', b'O', b'F', b'2'],
-        flavor: [flavor[0], flavor[1], flavor[2], flavor[3]],
+        flavor: flavor.try_into().unwrap(), // Safe because we validated length above
         length: 0, // 稍后填充
         num_tables,
         reserved: 0,
@@ -187,7 +197,8 @@ fn convert_font_to_woff2(font_data: &[u8], flavor: &[u8]) -> Result<Vec<u8>, Str
 
     // 更新文件总长度
     let total_length = woff2_data.len() as u32;
-    woff2_data[8..12].copy_from_slice(&total_length.to_be_bytes());
+    woff2_data[WOFF2_LENGTH_OFFSET..WOFF2_LENGTH_OFFSET + 4]
+        .copy_from_slice(&total_length.to_be_bytes());
 
     Ok(woff2_data)
 }
