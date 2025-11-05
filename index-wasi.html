@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTF/TTF to WOFF2 Converter (WASI)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 700px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9ff;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            color: #667eea;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        
+        .upload-hint {
+            color: #999;
+            font-size: 12px;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .convert-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s ease;
+            display: none;
+        }
+        
+        .convert-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .convert-btn:active {
+            transform: translateY(0);
+        }
+        
+        .convert-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .info {
+            background: #f8f9ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            color: #666;
+        }
+        
+        .info-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .info-label {
+            font-weight: 500;
+        }
+        
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            color: #856404;
+            font-size: 13px;
+        }
+        
+        .note strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔤 OTF/TTF 转 WOFF2</h1>
+        <p class="subtitle">使用 WASI + woff crate 的完整 WOFF2 转换器</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">点击或拖拽文件到这里</div>
+            <div class="upload-hint">支持 .otf 和 .ttf 格式</div>
+        </div>
+        
+        <input type="file" id="fileInput" accept=".otf,.ttf" />
+        
+        <div class="info" id="info">
+            <div class="info-row">
+                <span class="info-label">文件名:</span>
+                <span class="info-value" id="fileName">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">文件大小:</span>
+                <span class="info-value" id="fileSize">-</span>
+            </div>
+        </div>
+        
+        <button class="convert-btn" id="convertBtn">开始转换</button>
+        
+        <div class="status" id="status"></div>
+        
+        <div class="note">
+            <strong>💡 技术说明:</strong>
+            本工具使用 WASI (WebAssembly System Interface) 运行 Rust 编译的 WASM 模块。
+            使用 Google 的 woff2 库（通过 Rust woff crate）进行真正的 WOFF2 转换，
+            与 cn-font-split 使用相同的技术方案。完全在浏览器中运行，保护您的隐私。
+        </div>
+    </div>
+
+    <script type="module">
+        import { WASI } from 'https://cdn.jsdelivr.net/npm/@tybys/wasm-util@0.9.0/dist/+esm';
+        import { Volume, createFsFromVolume } from 'https://cdn.jsdelivr.net/npm/memfs-browser@4.7.7/+esm';
+        
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const info = document.getElementById('info');
+        const convertBtn = document.getElementById('convertBtn');
+        const status = document.getElementById('status');
+        
+        let selectedFile = null;
+        let wasmModule = null;
+        let fs = null;
+        
+        // Initialize virtual filesystem
+        async function initFS() {
+            fs = createFsFromVolume(new Volume());
+            await fs.promises.mkdir('/tmp/fonts', { recursive: true });
+            console.log('✅ Virtual filesystem initialized');
+        }
+        
+        // Load WASM module
+        async function loadWasm() {
+            showStatus('正在加载 WASM 模块...', 'info');
+            
+            try {
+                const wasmBytes = await fetch('./target/wasm32-wasip1/release/convert_otf_woff2.wasm')
+                    .then(r => r.arrayBuffer());
+                
+                const wasi = new WASI({
+                    args: ['font_key'],
+                    env: {},
+                    preopens: {
+                        '/': '/'
+                    },
+                    fs: fs,
+                    print(text) {
+                        console.log('[WASI stdout]', text);
+                    },
+                    printErr(text) {
+                        console.error('[WASI stderr]', text);
+                    }
+                });
+                
+                const imports = {
+                    wasi_snapshot_preview1: wasi.wasiImport
+                };
+                
+                const { instance } = await WebAssembly.instantiate(wasmBytes, imports);
+                wasmModule = { instance, wasi };
+                
+                hideStatus();
+                console.log('✅ WASM module loaded');
+            } catch (error) {
+                showStatus('加载 WASM 模块失败: ' + error.message, 'error');
+                console.error('Failed to load WASM:', error);
+            }
+        }
+        
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+        
+        // Show status
+        function showStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+        
+        // Hide status
+        function hideStatus() {
+            status.style.display = 'none';
+        }
+        
+        // Handle file selection
+        async function handleFileSelect(file) {
+            if (!file) return;
+            
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (ext !== 'otf' && ext !== 'ttf') {
+                showStatus('请选择 .otf 或 .ttf 文件', 'error');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            
+            info.style.display = 'block';
+            convertBtn.style.display = 'block';
+            hideStatus();
+        }
+        
+        // Convert font
+        async function convertFont() {
+            if (!selectedFile) return;
+            if (!wasmModule) {
+                showStatus('WASM 模块未加载', 'error');
+                return;
+            }
+            
+            convertBtn.disabled = true;
+            showStatus('正在转换...', 'info');
+            
+            try {
+                const fontData = new Uint8Array(await selectedFile.arrayBuffer());
+                const key = 'font_key';
+                
+                // Write input font to virtual filesystem
+                await fs.promises.writeFile(`/tmp/fonts/${key}`, fontData);
+                await fs.promises.mkdir(`/tmp/${key}`, { recursive: true });
+                
+                // Run WASM module
+                const startTime = performance.now();
+                await wasmModule.wasi.start(wasmModule.instance);
+                const endTime = performance.now();
+                
+                // Read output file
+                const outputFile = await fs.promises.readFile(`/tmp/${key}/font.woff2`);
+                const woff2Data = new Uint8Array(outputFile);
+                
+                const compressionRatio = ((1 - woff2Data.length / fontData.length) * 100).toFixed(1);
+                const conversionTime = (endTime - startTime).toFixed(2);
+                
+                showStatus(
+                    `✅ 转换成功! 原始: ${formatFileSize(fontData.length)} → WOFF2: ${formatFileSize(woff2Data.length)} (${compressionRatio}% 压缩, ${conversionTime}ms)`,
+                    'success'
+                );
+                
+                // Download
+                const blob = new Blob([woff2Data], { type: 'font/woff2' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = selectedFile.name.replace(/\.(otf|ttf)$/i, '.woff2');
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                // Cleanup
+                await fs.promises.unlink(`/tmp/fonts/${key}`);
+                await fs.promises.rm(`/tmp/${key}`, { recursive: true });
+                
+            } catch (error) {
+                showStatus(`转换失败: ${error.message}`, 'error');
+                console.error('Conversion error:', error);
+            } finally {
+                convertBtn.disabled = false;
+            }
+        }
+        
+        // Event listeners
+        uploadArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files[0]));
+        convertBtn.addEventListener('click', convertFont);
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+        
+        // Initialize
+        (async () => {
+            await initFS();
+            await loadWasm();
+        })();
+    </script>
+</body>
+</html>
