@@ -1,5 +1,5 @@
-use wasm_bindgen::prelude::*;
 use brotli::enc::BrotliEncoderParams;
+use wasm_bindgen::prelude::*;
 
 // 导入 JavaScript console.log 用于调试
 #[wasm_bindgen]
@@ -18,20 +18,20 @@ pub fn set_panic_hook() {
 
 /// WOFF2 文件头结构
 struct Woff2Header {
-    signature: [u8; 4],      // 'wOF2'
-    flavor: [u8; 4],         // 字体类型 (如 0x00010000 for TrueType)
-    length: u32,             // WOFF2 文件总长度
-    num_tables: u16,         // 字体表数量
-    reserved: u16,           // 保留字段，必须为0
-    total_sfnt_size: u32,    // 解压后的字体大小
+    signature: [u8; 4],         // 'wOF2'
+    flavor: [u8; 4],            // 字体类型 (如 0x00010000 for TrueType)
+    length: u32,                // WOFF2 文件总长度
+    num_tables: u16,            // 字体表数量
+    reserved: u16,              // 保留字段，必须为0
+    total_sfnt_size: u32,       // 解压后的字体大小
     total_compressed_size: u32, // 压缩数据总大小
-    major_version: u16,      // 主版本号
-    minor_version: u16,      // 次版本号
-    meta_offset: u32,        // 元数据偏移（0表示无元数据）
-    meta_length: u32,        // 元数据长度
-    meta_orig_length: u32,   // 元数据原始长度
-    priv_offset: u32,        // 私有数据偏移（0表示无）
-    priv_length: u32,        // 私有数据长度
+    major_version: u16,         // 主版本号
+    minor_version: u16,         // 次版本号
+    meta_offset: u32,           // 元数据偏移（0表示无元数据）
+    meta_length: u32,           // 元数据长度
+    meta_orig_length: u32,      // 元数据原始长度
+    priv_offset: u32,           // 私有数据偏移（0表示无）
+    priv_length: u32,           // 私有数据长度
 }
 
 impl Woff2Header {
@@ -64,10 +64,10 @@ fn read_u16_be(data: &[u8], offset: usize) -> u16 {
 fn compress_with_brotli(data: &[u8]) -> Result<Vec<u8>, String> {
     let mut compressed = Vec::new();
     let params = BrotliEncoderParams {
-        quality: 11,  // 最高质量压缩
+        quality: 11, // 最高质量压缩
         ..Default::default()
     };
-    
+
     let mut cursor = std::io::Cursor::new(data);
     match brotli::BrotliCompress(&mut cursor, &mut compressed, &params) {
         Ok(_) => Ok(compressed),
@@ -150,21 +150,21 @@ pub fn convert_otf_to_woff2(otf_data: &[u8]) -> Result<Vec<u8>, JsValue> {
 }
 
 /// 核心转换函数：将字体数据转换为 WOFF2 格式
-/// 
+///
 /// 这是一个简化实现，使用 Brotli 压缩整个字体数据
 /// 完整的 WOFF2 规范还包括表级别的优化和转换
 fn convert_font_to_woff2(font_data: &[u8], flavor: &[u8]) -> Result<Vec<u8>, String> {
     // 读取字体表数量
     let num_tables = read_u16_be(font_data, 4);
-    
+
     // 使用 Brotli 压缩字体数据
     let compressed_data = compress_with_brotli(font_data)?;
-    
+
     // 构建 WOFF2 头部
     let header = Woff2Header {
         signature: [b'w', b'O', b'F', b'2'],
         flavor: [flavor[0], flavor[1], flavor[2], flavor[3]],
-        length: 0,  // 稍后填充
+        length: 0, // 稍后填充
         num_tables,
         reserved: 0,
         total_sfnt_size: font_data.len() as u32,
@@ -177,15 +177,15 @@ fn convert_font_to_woff2(font_data: &[u8], flavor: &[u8]) -> Result<Vec<u8>, Str
         priv_offset: 0,
         priv_length: 0,
     };
-    
+
     // 组装 WOFF2 文件
     let mut woff2_data = header.write_to_vec();
     woff2_data.extend_from_slice(&compressed_data);
-    
+
     // 更新文件总长度
     let total_length = woff2_data.len() as u32;
     woff2_data[8..12].copy_from_slice(&total_length.to_be_bytes());
-    
+
     Ok(woff2_data)
 }
 
