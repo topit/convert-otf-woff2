@@ -1,46 +1,50 @@
 # convert-otf-woff2
 
-一个使用 Rust 和 WebAssembly 将 OTF/TTF 字体转换为 WOFF2 格式的工具。
+一个使用 Rust 和 WebAssembly (WASI) 将 OTF/TTF 字体转换为 WOFF2 格式的工具。
 
-A tool built with Rust and WebAssembly to convert OTF/TTF fonts to WOFF2 format.
+A tool built with Rust and WebAssembly (WASI) to convert OTF/TTF fonts to WOFF2 format.
 
 ## 功能特点 Features
 
-- ✨ 纯 Rust 实现核心转换逻辑
-- 🚀 使用 Brotli 压缩算法进行 WOFF2 编码
-- 🌐 支持在浏览器中运行
-- 📦 轻量级，高性能
+- ✨ 使用 Google woff2 库的完整 WOFF2 实现（通过 Rust `woff` crate）
+- 🚀 WASI 技术栈，支持 C/C++ 依赖
+- 🌐 通过 WASI 运行时在浏览器中运行
+- 📦 真正的 WOFF2 转换，符合完整规范
 - 🔒 客户端转换，保护隐私
-- ⚡ WebAssembly 加速
+- ⚡ 与 cn-font-split 相同的技术方案
 
 ## 技术架构 Architecture
 
-本项目使用纯 Rust 编写核心逻辑，并通过 `wasm-bindgen` 编译为 WebAssembly，以便在浏览器中运行。
+本项目使用 **WASI (WebAssembly System Interface)** 技术，这是参考 [cn-font-split](https://github.com/KonghaYao/cn-font-split) 的实现方案。
 
-**核心技术栈：**
+**为什么使用 WASI?**
 
-1. **Rust**: 核心转换逻辑实现
-2. **Brotli**: 使用纯 Rust 的 Brotli 压缩库 (`brotli` crate)
-3. **WOFF2**: 自实现简化的 WOFF2 文件格式编码
-4. **WebAssembly**: 通过 wasm-bindgen 编译为 WASM 模块
+纯 WebAssembly (wasm32-unknown-unknown) 无法使用 C/C++ 依赖，而 WOFF2 编码需要：
+- Google 的 woff2 C++ 库（业界标准）
+- Brotli 压缩库（C 实现）
+- 标准库和文件系统支持
 
-**实现说明：**
+WASI 解决方案：
+1. 编译目标：`wasm32-wasip1` (带系统接口的 WASM)
+2. 使用 `woff` crate (v0.3.4) - 封装了 Google woff2 库
+3. WASI SDK 用于编译 C/C++ 代码
+4. 浏览器端使用 WASI 运行时 (@tybys/wasm-util)
+5. 虚拟文件系统 (memfs-browser)
 
-这是一个简化的 WOFF2 实现，专注于核心转换逻辑：
-1. 验证输入字体格式（OTF/TTF）
-2. 读取字体表信息
-3. 使用 Brotli 压缩字体数据（质量级别 11）
-4. 构建 WOFF2 文件结构（文件头 + 压缩数据）
+**技术栈：**
 
-完整的 WOFF2 规范还包括表级别的优化和转换，本实现采用整体压缩的方式，
-确保转换结果可以被标准 WOFF2 解码器正确解析。
+- **Rust**: 核心逻辑和系统调用
+- **woff crate**: Google woff2 库的 Rust 绑定
+- **WASI SDK**: 编译 C/C++ 依赖
+- **@tybys/wasm-util**: 浏览器端 WASI 运行时
+- **memfs-browser**: 虚拟文件系统
 
 ## 快速开始 Quick Start
 
-### 安装依赖 Prerequisites
+### 前置要求 Prerequisites
 
 - Rust (>= 1.90.0)
-- wasm-pack
+- WASI SDK 24.0+
 - Node.js (用于本地开发服务器)
 
 ### 构建 Build
@@ -50,13 +54,33 @@ A tool built with Rust and WebAssembly to convert OTF/TTF fonts to WOFF2 format.
 git clone https://github.com/topit/convert-otf-woff2.git
 cd convert-otf-woff2
 
-# 构建 WASM 模块
-make all
-# 或者使用 wasm-pack
-wasm-pack build --target web --out-dir pkg
+# 使用构建脚本（自动下载 WASI SDK）
+./build-wasi.sh
+
+# 或手动构建
+rustup target add wasm32-wasip1
+
+# 设置 WASI SDK 环境变量
+export WASI_SDK_PATH=/path/to/wasi-sdk
+export CC_wasm32_wasip1="${WASI_SDK_PATH}/bin/clang --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot"
+export CXX_wasm32_wasip1="${WASI_SDK_PATH}/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot"
+export AR_wasm32_wasip1="${WASI_SDK_PATH}/bin/llvm-ar"
+export CARGO_TARGET_WASM32_WASIP1_RUSTFLAGS="-L ${WASI_SDK_PATH}/share/wasi-sysroot/lib/wasm32-wasip1 -l c++"
+
+cargo build --target wasm32-wasip1 --release
 ```
 
 ### 运行示例 Run Example
+
+```bash
+# 启动本地服务器
+python3 -m http.server 8000
+# 或使用 Node.js
+npx serve .
+
+# 访问
+# http://localhost:8000/index-wasi.html
+```
 
 ```bash
 # 使用 Python 启动本地服务器
@@ -83,34 +107,56 @@ npx serve .
     <button id="convert">Convert to WOFF2</button>
     
     <script type="module">
-        import init, { convert_otf_to_woff2 } from './pkg/convert_otf_woff2.js';
+        import { WASI } from 'https://cdn.jsdelivr.net/npm/@tybys/wasm-util@0.9.0/dist/+esm';
+        import { Volume, createFsFromVolume } from 'https://cdn.jsdelivr.net/npm/memfs-browser@4.7.7/+esm';
         
-        // 初始化 WASM 模块
-        await init();
+        // Initialize virtual filesystem
+        const fs = createFsFromVolume(new Volume());
+        await fs.promises.mkdir('/tmp/fonts', { recursive: true });
         
+        // Load WASM module
+        const wasmBytes = await fetch('./target/wasm32-wasip1/release/convert_otf_woff2.wasm')
+            .then(r => r.arrayBuffer());
+        
+        const wasi = new WASI({
+            args: ['font_key'],
+            env: {},
+            preopens: { '/': '/' },
+            fs: fs,
+            print(text) { console.log(text); },
+            printErr(text) { console.error(text); }
+        });
+        
+        const { instance } = await WebAssembly.instantiate(wasmBytes, {
+            wasi_snapshot_preview1: wasi.wasiImport
+        });
+        
+        // Convert function
         document.getElementById('convert').addEventListener('click', async () => {
             const file = document.getElementById('fontFile').files[0];
             if (!file) return;
             
-            // 读取文件
-            const arrayBuffer = await file.arrayBuffer();
-            const fontData = new Uint8Array(arrayBuffer);
+            const fontData = new Uint8Array(await file.arrayBuffer());
+            const key = 'font_key';
             
-            try {
-                // 使用纯 Rust WASM 进行转换
-                const woff2Data = convert_otf_to_woff2(fontData);
-                
-                // 下载转换后的文件
-                const blob = new Blob([woff2Data], { type: 'font/woff2' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = file.name.replace(/\.(otf|ttf)$/i, '.woff2');
-                a.click();
-                URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error('Conversion failed:', error);
-            }
+            // Write input
+            await fs.promises.writeFile(`/tmp/fonts/${key}`, fontData);
+            await fs.promises.mkdir(`/tmp/${key}`, { recursive: true });
+            
+            // Run conversion
+            await wasi.start(instance);
+            
+            // Read output
+            const woff2Data = await fs.promises.readFile(`/tmp/${key}/font.woff2`);
+            
+            // Download
+            const blob = new Blob([woff2Data], { type: 'font/woff2' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name.replace(/\.(otf|ttf)$/i, '.woff2');
+            a.click();
+            URL.revokeObjectURL(url);
         });
     </script>
 </body>
@@ -164,78 +210,71 @@ wasm-pack test --headless --firefox
 
 ## 技术说明 Technical Notes
 
-### WOFF2 压缩实现
+### WASI 方案说明
 
-当前的实现策略：
+本项目采用 WASI (WebAssembly System Interface) 方案，这是参考 [cn-font-split](https://github.com/KonghaYao/cn-font-split) 的成熟实现。
 
-1. **纯 Rust 实现**: 使用 `brotli` crate 提供 Brotli 压缩功能
-2. **简化的 WOFF2 格式**: 实现了 WOFF2 文件头和基本结构
-3. **整体压缩方式**: 将整个字体数据作为一个块进行 Brotli 压缩
+**为什么不用纯 Rust?**
 
-这种设计的优势：
-- 无需 C/C++ 依赖，纯 Rust 实现
-- 可以直接编译到 WASM，无需 Emscripten
-- 生成的 WOFF2 文件可以被标准解码器正确解析
-- 压缩率良好（通常在 30-50%）
+1. **WOFF2 编码库现状**：
+   - Rust 生态中只有 WOFF2 **解码**库（`woff2`, `wuff` crates）
+   - 没有纯 Rust 的 WOFF2 **编码**实现
+   - 业界标准是 Google 的 woff2 C++ 库
 
-### 与完整 WOFF2 规范的差异
+2. **wasm32-unknown-unknown 的限制**：
+   - 无标准库支持
+   - 无法使用 C/C++ 依赖
+   - 无文件系统访问
 
-完整的 WOFF2 规范（如 Google 的 woff2 库）包括：
-1. 表级别的压缩和优化
-2. 字形数据的特殊编码
-3. 索引表的优化
+3. **WASI 的优势**：
+   - 完整的标准库支持
+   - 可以使用 C/C++ 依赖（通过 WASI SDK）
+   - 提供文件系统等 POSIX 接口
+   - 在浏览器中通过 WASI 运行时执行
 
-本实现采用简化方式：
-1. 整体压缩字体数据
-2. 保持字体表结构不变
-3. 使用高质量 Brotli 压缩（级别 11）
+### 构建产物
 
-这确保了：
-- ✅ 生成的文件符合 WOFF2 基本规范
-- ✅ 可以被浏览器和字体工具正确解析
-- ✅ 获得良好的压缩效果
-- ✅ 无需复杂的依赖链
+- **WASM 文件**: `target/wasm32-wasip1/release/convert_otf_woff2.wasm` (~871KB)
+- **包含**: Google woff2 库 + Brotli 库 + Rust 代码
+- **格式**: WASI 兼容的 WebAssembly
+
+### 浏览器集成
+
+使用两个关键库：
+
+1. **@tybys/wasm-util**: 提供 WASI 运行时
+   - 实现 WASI 系统调用
+   - 管理进程和环境
+
+2. **memfs-browser**: 提供虚拟文件系统
+   - 在内存中模拟文件系统
+   - 支持 WASI 的文件操作
+
+### 与 cn-font-split 的对比
+
+| 特性 | cn-font-split | 本项目 |
+|------|--------------|--------|
+| WASI 目标 | ✅ wasm32-wasip1 | ✅ wasm32-wasip1 |
+| woff crate | ✅ v0.3.4 | ✅ v0.3.4 |
+| WASI 运行时 | @tybys/wasm-util | @tybys/wasm-util |
+| 虚拟文件系统 | memfs-browser | memfs-browser |
+| 字体切割 | ✅ | ❌ (专注转换) |
 
 ### API 文档
 
-#### `convert_otf_to_woff2(otf_data: Uint8Array): Uint8Array`
+#### WASI 模块接口
 
-将 OTF/TTF 字体转换为 WOFF2 格式。
+WASM 模块通过文件系统接口工作：
 
-**参数:**
-- `otf_data`: OTF 或 TTF 格式的字体数据
+**输入**:
+- 路径: `/tmp/fonts/{key}` - 输入字体文件
+- 参数: `args[0]` - 文件标识符
 
-**返回:**
-- `Uint8Array`: WOFF2 格式的字体数据
+**输出**:
+- 路径: `/tmp/{key}/font.woff2` - 输出 WOFF2 文件
 
-**示例:**
-```javascript
-const woff2Data = convert_otf_to_woff2(otfData);
-```
-
-#### `validate_font(font_data: Uint8Array): boolean`
-
-验证字体数据是否有效。
-
-**参数:**
-- `font_data`: 字体数据
-
-**返回:**
-- `boolean`: 如果是有效的 OTF/TTF 字体返回 true
-
-#### `get_font_format(font_data: Uint8Array): string`
-
-获取字体格式类型。
-
-**返回:**
-- `string`: 字体格式名称（如 "TrueType", "OpenType (CFF)" 等）
-
-#### `get_font_size(font_data: Uint8Array): number`
-
-获取字体数据大小。
-
-**返回:**
-- `number`: 字体数据的字节数
+**标准错误输出**:
+- 转换进度和统计信息通过 stderr 输出
 
 ## 参考项目 References
 
